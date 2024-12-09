@@ -1,0 +1,3 @@
+12b
+* Correcte methode uitzoeken die niet de hele nacht nodig heeft.
+* Antwoorden van andere mensen bekijken
