@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Set
 PEAK = 9
 
 
-# Lol, 10b literally just requires changing the sets to lists.
+# Lol, 10b literally just requires changing the sets to a list.
 def solve() -> int:
     acc: int = 0
 
