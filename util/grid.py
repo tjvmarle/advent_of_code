@@ -99,5 +99,13 @@ class Grid():
             return True
         return False
 
+    def get_adjacent_neighbours_with(self, x_pos: int, y_pos: int, condition: Callable) -> Optional[List[Cell]]:
+        middle_cell = self.get_cell(x_pos, y_pos)
+
+        if not middle_cell:
+            return None
+
+        return [cell for cell in middle_cell.get_adjacent_neighbours() if condition(cell)]
+
     def __iter__(self):
         return (row for row in self.grid)

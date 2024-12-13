@@ -1,70 +1,91 @@
-from util.input import *  # Yeah yeah, blah blah
-from util.grid import *
-from util.logger import *
-from typing import List, Tuple, Dict, Set
+from util.input import *  # Eat me
+from util.grid import Grid, Cell
+from typing import List, Tuple
+import cProfile
+from enum import Enum, auto
+import re
 
 
-# Even at 990 the solution takes just a few seconds. Anything (much) higher will hit Python's maximum recursion depth.
-MAX_BLINKS = 75
-
-# Yay, dynamic programming! 🎉 Keep a map of all in-between results, otherwise we'll end up recalculating the same
-# input value over and over again. The key has to be a tuple since you can't hash a list.
-blink_results = {}  # (nr, blink_count) : stone_count_at_max_blinks
+OFFSET = 10000000000000
 
 
-# Technically you could modify the function to also keep the progressive results for a certain input for all remaining
-# blink-levels. This, however, would eat a lot of additional memory with, for now, unneeded performance improvements.
-# The blink_o_plier(...) will only ever return when hitting the blink limit, so each return value is guaranteed to be
-# the final result for that particular nr and blink level. Cache all of them, so we don't have to repeat the effort.
-def blink_o_plier(nr: int, blink_count: int) -> int:
-    """Increases blink_count by one and applies the blink rule to the number. Recursively calls itself until blink
-    limit is reached."""
+class ClawGame():
+    """Contains a parser, the data and a solver."""
+    COST_A = 3
+    COST_B = 1
 
-    if blink_count == MAX_BLINKS:
-        return 1
+    def __init__(self, a_button_line, b_button_line, prize_line) -> None:
+        """Does some basic regex parsing of the input to retrieve the relevant data for the clawgame."""
 
-    global blink_results
-    if cached_val := blink_results.get((nr, blink_count), None):
-        return cached_val
+        self.a_x, self.a_y = [int(val) for val in re.findall(r'\d+', a_button_line)]
+        self.b_x, self.b_y = [int(val) for val in re.findall(r'\d+', b_button_line)]
+        self.prize_x, self.prize_y = [int(val) + OFFSET for val in re.findall(r'\d+', prize_line)]
 
-    blink_count += 1
+    def __repr__(self) -> str:
+        return f"self.a: {self.a_x},{self.a_y}, self.b: {self.b_x},{self.b_y}, prize: {self.prize_x},{self.prize_y}"
 
-    local_acc = 0
-    orig_nr = nr
-    if nr == 0:
-        nr = 1
+    def play_game(self):
+        """Solves the required steps (if possible) and cost to win the claw game.
 
-    elif len(nr_str := str(nr)) % 2 == 0:
-        half = len(nr_str) // 2
-        local_acc += blink_o_plier(int(nr_str[:half]), blink_count)
-        local_acc += blink_o_plier(int(nr_str[half:]), blink_count)
+        Basic assumption is that every game with a solution only has a single solution. This isn't guaranteed if the
+        button vectors align exactly with eachother (e.g. (2,5) and (60,150)). This could invalidate our attempt, as
+        this could skew the cost. If that turns out to be the case we can easily fix that in the constructor.
+        --> turns out we didn't need to do that."""
 
-        # We can save 'nr' since we haven't changed it.
-        blink_results[(nr, blink_count - 1)] = local_acc
-        return local_acc
+        # Values are too high to brute force. However, we have two equations with two unknowns, which can be solved.
+        #   prize_x = but_a_x * press_a + but_b_x * press_b
+        #   prize_y = but_a_y * press_a + but_b_y * press_b
 
-    else:
-        nr *= 2024
+        # After some quick maths. We need to round due to induced floating-point conversions.
+        a_presses = round((self.prize_x - (self.b_x * self.prize_y) / self.b_y) /
+                          (self.a_x - (self.a_y * self.b_x) / self.b_y))
 
-    local_acc += blink_o_plier(nr, blink_count)
+        # Just invert all the constants of the previous equation.
+        b_presses = round((self.prize_y - (self.a_y * self.prize_x) / self.a_x) /
+                          (self.b_y - (self.b_x * self.a_y) / self.a_x))
 
-    # Save agains't the original number, since we've changed it for the next input.
-    blink_results[(orig_nr, blink_count - 1)] = local_acc
+        if a_presses < 0 or b_presses < 0:
+            return 0  # We can't 'unpress' a button.
 
-    return local_acc
+        # We re-check the calculated presses against the prize value just in case rounding induced some error.
+        if a_presses * self.a_x + b_presses * self.b_x == self.prize_x and \
+           a_presses * self.a_y + b_presses * self.b_y == self.prize_y:
+            return a_presses * ClawGame.COST_A + b_presses * ClawGame.COST_B
+
+        return 0  # No solution or perhaps a rounding error, which we'll fix if our solution gets rejected.
 
 
-# We can evaluate each number one-by-one as long as we keep track of their individual blink count.
+def get_game(lines) -> ClawGame | None:
+    """Reads the input file and converts it into a clawgame."""
+    game = []
+    for line in lines:
+        if not line:
+            continue
+
+        game.append(line)
+        if 'Prize' in line:
+            break
+
+    if not game:
+        return None
+
+    button_a, button_b, prize = game
+
+    return ClawGame(button_a, button_b, prize)
+
+
 def solve() -> int:
-    # marked_nrs = [[nr, 0] for nr in get_lines_as_nrs(True)]  # type: ignore - 55312
-    marked_nrs = [[nr, 0] for nr in get_lines_as_nrs()]
+    lines = get_lines()
+    # lines = get_lines(True)
 
-    acc = 0
-    for nr, blink_count in marked_nrs:
-        acc += blink_o_plier(nr, blink_count)
+    acc: int = 0
 
-    return acc  # 223767210249237, took ~ 0.25s
+    while game := get_game(lines):
+        acc += game.play_game()
+
+    return acc  # 89013607072065
 
 
 if __name__ == "__main__":
-    print(solve())
+    cProfile.run("print(solve())", "performance_data")
+    # print(solve())

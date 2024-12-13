@@ -1,5 +1,6 @@
 from util.input import *  # Eat me
 from typing import List, Tuple
+from enum import Enum, auto
 
 Grid = List[List[str]]
 
@@ -12,6 +13,39 @@ def quarter_turn_clockwise(grid: Grid) -> Grid:
 
 def quarter_turn_counter_clockwise(grid: Grid) -> Grid:
     return [list(tup) for tup in zip(*grid)][::-1]
+
+
+class Direction(Enum):
+    UP = auto()
+    RIGHT = auto()
+    DOWN = auto()
+    LEFT = auto()
+
+
+def print_grid(grid: Grid, turns):
+    dir_char = {Direction.UP: "^",
+                Direction.RIGHT: ">",
+                Direction.DOWN: "V",
+                Direction.LEFT: "<"}
+
+    global directions_grid
+    for _ in range(turns):
+        grid = quarter_turn_clockwise(grid)
+        directions_grid = quarter_turn_clockwise(directions_grid)
+
+    for y, line in enumerate(grid):
+        msg_line = []
+        for x, char in enumerate(line):
+            if move_set := directions_grid[y][x]:
+                msg_line.append(dir_char[next(iter(move_set))])
+            else:
+                msg_line.append(char)
+
+        print(f"  {''.join(msg_line)}")
+
+    for _ in range(turns):
+        grid = quarter_turn_counter_clockwise(grid)
+        directions_grid = quarter_turn_counter_clockwise(directions_grid)
 
 
 GUARD = "^"

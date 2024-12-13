@@ -3,12 +3,21 @@ import inspect
 from typing import Generator, Any, List
 
 
+def _find_file_path() -> str:
+    for frame_index in range(3, 13):
+        caller_path = inspect.getframeinfo(sys._getframe(frame_index)).filename
+        if 'main.py' in caller_path:
+            return caller_path
+
+    return ""
+
+
 def _get_lines(tst: bool = False):
     """Creeërt een generator van de input file. De inhoud is regel voor regel door te lezen. De locatie van de inputfile
     wordt bepaald a.d.h.v. het callende script.
     """
-    caller_path = inspect.getframeinfo(sys._getframe(2)).filename
     file_name = 'input - test.txt' if tst else 'input.txt'
+    caller_path = _find_file_path()
     input_file = caller_path.replace('main.py', file_name)
 
     with open(input_file, 'r') as file:
@@ -18,7 +27,7 @@ def _get_lines(tst: bool = False):
 def get_lines(tst: bool = False) -> List[str]:
     """Geeft 1-voor-1 de regels van een input file terug."""
     for line in _get_lines(tst):
-        return line
+        yield line
 
 
 def get_lines_as_list(tst: bool = False):
