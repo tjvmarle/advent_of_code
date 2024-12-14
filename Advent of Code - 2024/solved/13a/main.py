@@ -1,4 +1,4 @@
-from util.input import *  # # Yeah yeah, blah blah
+from util.input import *  # Yeah yeah, blah blah
 from util.grid import Grid, Cell
 from typing import List, Tuple
 import cProfile

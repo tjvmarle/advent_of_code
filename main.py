@@ -1,89 +1,157 @@
-from util.input import *  # Eat me
+from util.input import *  # # Yeah yeah, blah blah
 from util.grid import Grid, Cell
 from typing import List, Tuple
 import cProfile
 from enum import Enum, auto
-import re
+import numpy as np
+from functools import reduce
+
+rules_map: dict[int, List[int]] = {}
+
+EMPTY = '.'
+FIELD = 'X'
+FIELD_MULTI = 3
 
 
-OFFSET = 10000000000000
+def edge_crawl(grid: Grid, start) -> int:
+    start_x, start_y = start
+    start_cell = grid.get_cell(start_x, start_y)
+    next_cell = grid.get_cell(start_x + 1, start_y)
+
+    side_count = 1
+
+    # Move one to the right.
+
+    def same_val(neighbour_cell: Cell):
+        return neighbour_cell.get_value() == FIELD
+
+    while next_cell != start_cell:
+        neighbours = grid.get_surrounding_neighbours_with(next_cell.x_pos, next_cell.y_pos, same_val)
+        print(f"curr_cell: {next_cell}, neighbours: {neighbours}")
+
+        # ...  .xx  ... ..x
+        # xXx  xXx  xX. xX.
+        # xxx  xxx  xx. xx.
+        #  5    7    3   4
+
+        match(len(neighbours)):
+            case 5:
+                # Regular case, keep moving right
+                print(f"  Regular case")
+
+            case 7:
+                print(f"  Upside corner")
+                side_count += 1
+                # Rotate clockwise
+                ...
+
+            case 3 | 4:
+                print(f"  Downside corner")  # Possibly with a diagonal field.
+                # Rotate counter-clockwise
+                side_count += 1
+                ...
+
+            case _:
+                # This should be impossible
+                print(f"  Impossibru: {next_cell}")
+                ...
+
+        next_cell = grid.get_cell(next_cell.x_pos + 1, next_cell.y_pos)
+
+    return 0
 
 
-class ClawGame():
-    """Contains a parser, the data and a solver."""
-    COST_A = 3
-    COST_B = 1
+def my_sides(subfield: List[Cell]) -> int:
+    # To determine the number of sides we can scan the edge for corners. We need to repeat that for any nested fields.
+    max_x, max_y = 0, 0
+    max_x = reduce(max, [cell.x_pos for cell in subfield], 0)
+    max_y = reduce(max, [cell.y_pos for cell in subfield], 0)
 
-    def __init__(self, a_button_line, b_button_line, prize_line) -> None:
-        """Does some basic regex parsing of the input to retrieve the relevant data for the clawgame."""
+    # We multiply the field in size so it's easier to scan the edges without interference.
+    field_holder = np.full(shape=((max_y + 1) * FIELD_MULTI + 2,
+                                  (max_x + 1) * FIELD_MULTI + 2), fill_value=EMPTY, dtype=str)
 
-        self.a_x, self.a_y = [int(val) for val in re.findall(r'\d+', a_button_line)]
-        self.b_x, self.b_y = [int(val) for val in re.findall(r'\d+', b_button_line)]
-        self.prize_x, self.prize_y = [int(val) + OFFSET for val in re.findall(r'\d+', prize_line)]
+    for cell in subfield:
+        for y_offset in range(FIELD_MULTI):
+            for x_offset in range(FIELD_MULTI):
+                curr_x = (cell.x_pos * FIELD_MULTI) + x_offset + 1
+                curr_y = (cell.y_pos * FIELD_MULTI) + y_offset + 1
 
-    def __repr__(self) -> str:
-        return f"self.a: {self.a_x},{self.a_y}, self.b: {self.b_x},{self.b_y}, prize: {self.prize_x},{self.prize_y}"
+                field_holder[curr_y][curr_x] = FIELD
 
-    def play_game(self):
-        """Solves the required steps (if possible) and cost to win the claw game.
+    start_position = []
+    for y, row in enumerate(field_holder):
+        if start_position:
+            break
+        for x, cell_val in enumerate(row):
+            if cell_val == EMPTY:
+                continue
 
-        Basic assumption is that every game with a solution only has a single solution. This isn't guaranteed if the
-        button vectors align exactly with eachother (e.g. (2,5) and (60,150)). This could invalidate our attempt, as
-        this could skew the cost. If that turns out to be the case we can easily fix that in the constructor.
-        --> turns out we didn't need to do that."""
-
-        # Values are too high to brute force. However, we have two equations with two unknowns, which can be solved.
-        #   prize_x = but_a_x * press_a + but_b_x * press_b
-        #   prize_y = but_a_y * press_a + but_b_y * press_b
-
-        # After some quick maths. We need to round due to induced floating-point conversions.
-        a_presses = round((self.prize_x - (self.b_x * self.prize_y) / self.b_y) /
-                          (self.a_x - (self.a_y * self.b_x) / self.b_y))
-
-        # Just invert all the constants of the previous equation.
-        b_presses = round((self.prize_y - (self.a_y * self.prize_x) / self.a_x) /
-                          (self.b_y - (self.b_x * self.a_y) / self.a_x))
-
-        if a_presses < 0 or b_presses < 0:
-            return 0  # We can't 'unpress' a button.
-
-        # We re-check the calculated presses against the prize value just in case rounding induced some error.
-        if a_presses * self.a_x + b_presses * self.b_x == self.prize_x and \
-           a_presses * self.a_y + b_presses * self.b_y == self.prize_y:
-            return a_presses * ClawGame.COST_A + b_presses * ClawGame.COST_B
-
-        return 0  # No solution or perhaps a rounding error, which we'll fix if our solution gets rejected.
-
-
-def get_game(lines) -> ClawGame | None:
-    """Reads the input file and converts it into a clawgame."""
-    game = []
-    for line in lines:
-        if not line:
-            continue
-
-        game.append(line)
-        if 'Prize' in line:
+            start_position = [x, y]
             break
 
-    if not game:
-        return None
+    for row in field_holder:
+        print("".join(row))
 
-    button_a, button_b, prize = game
+    sides = edge_crawl(Grid(field_holder.tolist()), start_position)
 
-    return ClawGame(button_a, button_b, prize)
+    return 0
 
 
 def solve() -> int:
-    lines = get_lines()
-    # lines = get_lines(True)
-
     acc: int = 0
 
-    while game := get_game(lines):
-        acc += game.play_game()
+    # grid = get_lines_as_grid()
+    grid = get_lines_as_grid(True)
+    total_field = Grid(grid)
 
-    return acc  # 89013607072065
+    field_holder = np.full(shape=(len(grid[0]), len(grid)), fill_value=EMPTY, dtype=str)
+
+    # First find the fields' area and save its'exact shape. Determine the perimeter seperately.
+    for y, line in enumerate(grid):
+        for x, curr_char in enumerate(line):
+            if total_field.get_val(x, y) == EMPTY:
+                continue
+
+            curr_area = 1
+
+            # This keeps track of the entire field we're currently evaluating, while wiping the total field.
+            acc_curr_field: List[Cell] = [start_cell := total_field.get_cell(x, y)]
+
+            # This is a growing frontline to detect the current field.
+            curr_char_fields = [start_cell]
+
+            while curr_char_fields:
+                print(f"Working through {curr_char_fields}, curr_char: {curr_char}")
+                if len(curr_char_fields) > 6:
+                    return 0
+
+                curr_cell = curr_char_fields.pop(0)
+                if curr_cell.get_value() == EMPTY:
+                    continue
+
+                def same_val(cell: Cell):
+                    nonlocal curr_cell
+                    print(f"  Checking: {curr_cell} vs {cell}")
+                    return cell.get_value() == curr_cell.get_value()
+
+                neighbours = total_field.get_adjacent_neighbours_with(curr_cell.x_pos, curr_cell.y_pos, same_val)
+                print(f"    From {total_field.get_cell(curr_cell.x_pos, curr_cell.y_pos)}, got back {neighbours}")
+                total_field.set_val(curr_cell.x_pos, curr_cell.y_pos, EMPTY)
+
+                for neighbour in neighbours:
+                    curr_area += 1
+
+                    # We've 'consumed' the current cell.
+                    acc_curr_field.append(neighbour)
+                    curr_char_fields.append(neighbour)
+            else:
+                # curr_char_field consumed. We should now have the area and perimeter of curr_char, that started at x,y
+                curr_perimeter = my_sides(acc_curr_field)
+                acc += curr_area * curr_perimeter
+                return 10
+
+    return acc  # 1461806
 
 
 if __name__ == "__main__":

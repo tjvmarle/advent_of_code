@@ -107,5 +107,18 @@ class Grid():
 
         return [cell for cell in middle_cell.get_adjacent_neighbours() if condition(cell)]
 
+    def get_surrounding_neighbours_with(self, x_pos: int, y_pos: int, condition: Callable) -> Optional[List[Cell]]:
+        middle_cell = self.get_cell(x_pos, y_pos)
+
+        if not middle_cell:
+            return None
+
+        return [cell for cell in middle_cell.get_surrounding_neighbours() if condition(cell)]
+
+    def rotate(clockwise=True):
+        # TODO: Create a 'view'. Do not actually rotate the matrix.
+        # Keep track of rotations.
+        ...
+
     def __iter__(self):
         return (row for row in self.grid)
