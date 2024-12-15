@@ -1,4 +1,4 @@
-from typing import List, Any, Optional, Generator, Callable
+from typing import List, Any, Optional, Generator, Callable, Tuple
 
 
 class Cell():
@@ -16,6 +16,9 @@ class Cell():
 
     def set_value(self, value: Any) -> Any:
         self.value = value
+
+    def get_pos(self):
+        return self.x_pos, self.y_pos
 
     def get_adjacent_neighbours(self) -> List['Cell']:
         """Returns all cells within bounds that are directly up, down, left and right of this cell."""
@@ -63,6 +66,8 @@ class Grid():
         self.max_x = len(self.grid[0]) - 1
         self.max_y = len(self.grid) - 1
 
+        self._rotations = 0
+
     def _parse_grid(self, grid: Grid_input, is_integer: bool = False) -> Cell_Grid:
         grid_list: Grid_input = []
 
@@ -81,11 +86,34 @@ class Grid():
         for line in self.grid:
             print(f"{spacer}".join([to_string(cell.get_value()) for cell in line]))
 
+    def rotate_position(self, x_pos: int, y_pos: int) -> Tuple[int, int]:
+
+        new_x, new_y = x_pos, y_pos
+        match(self._rotations % 4):
+            case 0:
+                new_x, new_y = x_pos, y_pos
+
+            case 1:  # (x,y) becomes (y,-x)
+                new_x, new_y = y_pos, -x_pos + self.max_x
+
+            case 2:  # (x,y) becomes (-x,-y)
+                new_x, new_y = -x_pos + self.max_x, -y_pos + self.max_y
+
+            case 3:  # (x,y) becomes (-y,x)
+                new_x, new_y = -y_pos + self.max_x, x_pos
+
+        # print(f"  Rotated {x_pos},{y_pos} into {new_x},{new_y}.")
+
+        return new_x, new_y
+
     def get_cell(self, x_pos: int, y_pos: int) -> Optional[Cell]:
-        if not self._in_bounds(x_pos, y_pos):
+
+        actual_x, actual_y = self.rotate_position(x_pos, y_pos)
+        if not self._in_bounds(actual_x, actual_y):
+            # print(f"Out of bounds: {x_pos},{y_pos}")
             return None
 
-        return self.grid[y_pos][x_pos]
+        return self.grid[actual_y][actual_x]
 
     def get_val(self, x_pos: int, y_pos: int) -> Optional[Any]:
         if cell := self.get_cell(x_pos, y_pos):
@@ -115,10 +143,8 @@ class Grid():
 
         return [cell for cell in middle_cell.get_surrounding_neighbours() if condition(cell)]
 
-    def rotate(clockwise=True):
-        # TODO: Create a 'view'. Do not actually rotate the matrix.
-        # Keep track of rotations.
-        ...
+    def rotate(self, clockwise=True):
+        self._rotations += 1 if clockwise else -1
 
     def __iter__(self):
         return (row for row in self.grid)

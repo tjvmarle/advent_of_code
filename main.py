@@ -1,135 +1,240 @@
 from util.input import *  # # Yeah yeah, blah blah
 from util.grid import Grid, Cell
-from typing import List, Tuple
+from typing import List, Tuple, Set
 import cProfile
-from enum import Enum, auto
+from operator import itemgetter, attrgetter
 import numpy as np
 from functools import reduce
 
 rules_map: dict[int, List[int]] = {}
 
+WALL = '#'
 EMPTY = '.'
-FIELD = 'X'
-FIELD_MULTI = 3
+BLOCK = 'O'
+BLOCKS = ['[', ']']
+ROBOT = '@'
+
+move_map = {'<': (-1, 0), 'v': (0, 1), '>': (1, 0), '^': (0, -1)}
 
 
-def my_sides(subfield: List[Cell], field_char: str) -> int:
-    """Determines the number of sides of a field by counting the number of corners."""
+def get_grid_and_moves(lines):
 
-    # To determine the number of sides we can scan each position for their neighbours. We also add an empty line around
-    # the entire field to make scanning easier later. --> TODO: We don't need the edge anymore.
-    max_x, max_y = 0, 0
-    max_x = reduce(max, [cell.x_pos for cell in subfield], 0)
-    max_y = reduce(max, [cell.y_pos for cell in subfield], 0)
+    grid = []
+    moves = []
+    we_ve_got_the_moves = False  # Let's do it again ⚡📞👦🏼!
 
-    # We multiply the field in size so we'll reduce the number of possible situations we can find when counting the
-    # number of neighbours.
-    multi_field = np.full(shape=((max_y + 1) * FIELD_MULTI + 2,
-                                 (max_x + 1) * FIELD_MULTI + 2), fill_value=EMPTY, dtype=str)
+    y_index = 0
+    robo_start = ()
+    for line in lines:
 
-    for cell in subfield:
-        for y_offset in range(FIELD_MULTI):
-            for x_offset in range(FIELD_MULTI):
-                curr_x = (cell.x_pos * FIELD_MULTI) + x_offset + 1
-                curr_y = (cell.y_pos * FIELD_MULTI) + y_offset + 1
+        if line == []:
+            we_ve_got_the_moves = True
+            continue
 
-                multi_field[curr_y][curr_x] = field_char
+        # Lol, I can't believe this works, although I'm also not suprised it does.
+        if we_ve_got_the_moves:
+            moves.append([char for char in line])
+        else:
+            row = []
+            for char in line:
+                if char == BLOCK:
+                    row.append('[')
+                    row.append(']')
+                elif char == ROBOT:
+                    row.append(ROBOT)
+                    row.append(EMPTY)
+                else:
+                    row.append(char)
+                    row.append(char)
+            grid.append(row)
 
-    # We check every field cell and count its' neighbours. Certain counts correspond to it being a corner or not.
-    # Because we've grown the field (increased resolution) only a few options are possible (in any rotation):
-    #
-    # Corner:           x    x    x
-    #
-    #             ...  .xx  ...  ..x  xxx
-    #             xOx  xOx  xO.  xO.  xOx
-    #             xxx  xxx  xx.  xx.  xxx
-    #
-    # Neigbours:   5    7    3    4    8
-    #
-    # No additional effort is required for situation 4, since we'll scan the diagonal corner also.
+        if ROBOT in grid[-1]:
+            x_index = grid[-1].index(ROBOT)
+            robo_start = (x_index, y_index)
 
-    # For example, these situations aren't possible anymore due to increasing the resolution, so we don't have to
-    # perform any additional calculations for those.
-    #
-    #  ...  .x.  .xx
-    #  xOx  xOx  xOx
-    #  x.x  xxx  xx.
-    #   4    5    6
+        y_index += 1
 
-    multi_grid = Grid(multi_field.tolist())
-    def is_field(other: Cell): return other.get_value() == field_char
+    flat_moves = []
+    for movelist in moves:
+        for move in movelist:
+            flat_moves.append(move)
+    return grid, flat_moves, robo_start
 
-    side_count = 0
-    for multi_row in multi_grid:
-        for multi_cell in multi_row:
-            if multi_cell.get_value() != FIELD_CHAR:
-                # This way we also automatically skip the edges of the grid, since we've added an empty border.
-                continue
 
-            neighbours = multi_grid.get_surrounding_neighbours_with(multi_cell.x_pos, multi_cell.y_pos, is_field)
+def get_other_half(warehouse: Grid, current_block_half: Cell) -> Cell | None:
+    offset_x, _ = move_map['>' if current_block_half.get_value() == BLOCKS[0] else '<']
+    return warehouse.get_cell(current_block_half.x_pos + offset_x, current_block_half.y_pos)  # y-pos doesn't change
 
-            match(len(neighbours)):
-                case 5 | 6 | 8:
-                    pass
 
-                case 3 | 4 | 7:
-                    side_count += 1
+move_failed = set(), False
 
-                case _:
-                    raise NotImplementedError
 
-    return side_count
+def check_next_for_blocks(warehouse: Grid, curr_block_cell: Cell, direction: Tuple[int, int]) -> Tuple[Set[Cell], bool]:
+    # This is only for detecting when moving up or down.
+
+    #       #
+    #      []
+    #   [][]
+    #    []
+    #   []
+    #   []
+    #    @  ^
+
+    moveable_cells = set([curr_block_cell])
+
+    # if next is block, check both for the next layer. If any hit a wall, the entire stack won't move.
+    move_x, move_y = direction
+    next_layer_cell = warehouse.get_cell(curr_block_cell.x_pos, curr_block_cell.y_pos + move_y)
+
+    if (next_layer_cell_val := next_layer_cell.get_value()) == WALL:
+        # No movement possible.
+        return move_failed
+
+    if next_layer_cell_val == EMPTY:
+        # Possible candidate to move current cell value into.
+        # moveable_cells.add(next_layer_cell)
+        return moveable_cells, True
+
+    if next_layer_cell_val in BLOCKS:
+        next_layer_moveable_cells, move_possible = check_next_for_blocks(warehouse, next_layer_cell, direction)
+
+        if not move_possible:
+            return move_failed
+        moveable_cells.update(next_layer_moveable_cells)
+
+        next_layer_other_half = get_other_half(warehouse, next_layer_cell)
+        if next_layer_other_half not in moveable_cells:
+            # This saves a bunch of duplicate searching due to the branching nature of the search.
+            next_layer_moveable_cells, move_possible = check_next_for_blocks(warehouse,
+                                                                             next_layer_other_half,
+                                                                             direction)
+
+        if not move_possible:
+            return move_failed
+
+        moveable_cells.update(next_layer_moveable_cells)
+
+    return moveable_cells, True
+
+
+def move_stack(warehouse: Grid, stack: Set[Cell], move_down: bool):
+    # Move the stack of movable blocks.
+    # Convert to list. Order top/bottom or other way around, depending on the direction moved.
+
+    move_steps = sorted(list(stack), key=attrgetter('y_pos', 'x_pos'), reverse=move_down)
+    # print(f"Sorted step list: {move_steps}")
+
+    # Every item in this list is guaranteed to be able to move up/down one cell.
+    move_offset = 1 if move_down else -1
+
+    for cell_to_move in move_steps:
+        next_x, next_y = cell_to_move.x_pos, cell_to_move.y_pos + move_offset
+
+        # print(f"moving {cell_to_move} to {next_x, next_y}")
+        warehouse.set_val(next_x, next_y, cell_to_move.get_value())
+
+    # This is the block directly adjacent to the robot. One of these will be filled by the robot later.
+    warehouse.set_val(*move_steps[-1].get_pos(), EMPTY)
+    warehouse.set_val(*move_steps[-2].get_pos(), EMPTY)
+
+
+def move_blocks(warehouse: Grid, robo_cell: Cell, direction: Tuple[int, int]):
+
+    move_x, move_y = direction
+    next_cell = warehouse.get_cell(robo_cell.x_pos + move_x, robo_cell.y_pos + move_y)
+
+    while next_cell.get_value() != EMPTY:
+        if next_cell.get_value() == WALL:
+            # Blocks all the way to the wall.
+            return robo_cell
+
+        if (block_half := next_cell.get_value()) in BLOCKS:
+
+            if up_down := (direction in (move_map['^'], move_map['v'])):
+                # Moving up or down
+                offset_x, offset_y = move_map['>' if block_half == BLOCKS[0] else '<']
+                other_block_half = warehouse.get_cell(next_cell.x_pos + offset_x, next_cell.y_pos + offset_y)
+                moveable_cells, move_possible = check_next_for_blocks(warehouse, next_cell, direction)
+
+                if not move_possible:
+                    # print(f"1: Move failed due to hitting a wall.")
+                    return robo_cell
+
+                if other_block_half not in moveable_cells:
+                    more_moveable_cells, move_possible = check_next_for_blocks(warehouse, other_block_half, direction)
+
+                    if not move_possible:
+                        # print(f"2: Move failed due to hitting a wall.")
+                        return robo_cell
+                    moveable_cells.update(more_moveable_cells)
+
+                    # TODO: This only moves the blocks. Don't forget to move the robot.
+                    move_stack(warehouse, moveable_cells, direction == (0, 1))
+                    break
+
+            else:
+                # Moving left/right
+                next_cell = warehouse.get_cell(next_cell.x_pos + move_x, next_cell.y_pos + move_y)
+
+    if not up_down:
+        # We need to walk back and invert all the blocks.
+        raise NotImplementedError
+        ...
+
+    # TODO: correctly move blocks sideways
+    # next_cell.set_value(BLOCK)
+    robo_cell.set_value(EMPTY)
+    next_robo_cell = warehouse.get_cell(robo_cell.x_pos + move_x, robo_cell.y_pos + move_y)
+    next_robo_cell.set_value(ROBOT)
+    return next_robo_cell
 
 
 def solve() -> int:
     acc: int = 0
 
-    grid = get_lines_as_grid()
-    # grid = get_lines_as_grid(True)
-    total_field = Grid(grid)
+    # lines = get_lines_as_grid()
+    lines = get_lines_as_grid(True)
 
-    # First find the fields' area and save its' exact shape. Determine the perimeter seperately.
-    for y, line in enumerate(grid):
-        for x, curr_char in enumerate(line):
-            if total_field.get_val(x, y) == EMPTY:
+    grid, moves, robo_pos = get_grid_and_moves(lines)
+    warehouse = Grid(grid)
+    robo_cell = warehouse.get_cell(*robo_pos)
+
+    while moves:
+        robo_x, robo_y = robo_cell.get_pos()
+        curr_move = moves.pop(0)
+        print(f"curr_move: {curr_move}")
+        warehouse.print()
+        move_x, move_y = move_map[curr_move]
+
+        if (next_cell := warehouse.get_cell(robo_x + move_x, robo_y + move_y)).get_value() == WALL:
+            continue
+
+        if next_cell.get_value() == EMPTY:
+            next_cell.set_value(ROBOT)
+            robo_cell.set_value(EMPTY)
+            robo_cell = next_cell
+            continue
+
+        if next_cell.get_value() in BLOCKS:
+            # Move blocks in the direction if possible
+            robo_cell = move_blocks(warehouse, robo_cell, (move_x, move_y))
+            continue
+
+    for y, row in enumerate(warehouse):
+        for x, cell in enumerate(row):
+            if cell.get_value() not in BLOCKS:
                 continue
 
-            # This keeps track of the entire field we're currently evaluating, while wiping the total field.
-            acc_curr_field: List[Cell] = [start_cell := total_field.get_cell(x, y)]
+            acc += y * 100 + x
 
-            # This is a growing frontline to detect the current field.
-            curr_char_fields = [start_cell]
+    print(f"\nFinal state:")
+    warehouse.print()
 
-            curr_area = 1
-            while curr_char_fields:
-
-                curr_cell = curr_char_fields.pop(0)
-                if curr_cell.get_value() == EMPTY:
-                    continue
-
-                def same_val(cell: Cell):
-                    nonlocal curr_cell
-                    return cell.get_value() == curr_cell.get_value()
-
-                neighbours = total_field.get_adjacent_neighbours_with(curr_cell.x_pos, curr_cell.y_pos, same_val)
-                total_field.set_val(curr_cell.x_pos, curr_cell.y_pos, EMPTY)
-
-                for neighbour in neighbours:
-                    if neighbour in acc_curr_field:
-                        continue
-                    curr_area += 1
-
-                    # We've 'consumed' the current cell.
-                    acc_curr_field.append(neighbour)
-                    curr_char_fields.append(neighbour)
-            else:
-                # curr_char_field consumed. Count corners to find number of sides.
-                curr_perimeter = my_sides(acc_curr_field, curr_char)
-                acc += curr_area * curr_perimeter
+    print(f"\n Don't forget you've changed the testdata. Both grid and input moves.")
 
     return acc  # 1461806
 
 
 if __name__ == "__main__":
-    cProfile.run("print(solve())", "performance_data")
-    # print(solve())
+    # cProfile.run("print(solve())", "performance_data")
+    print(solve())
