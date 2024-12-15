@@ -117,21 +117,20 @@ def check_next_for_blocks(warehouse: Grid, curr_block_cell: Cell, direction: Tup
     return moveable_cells, True
 
 
-def move_stack(warehouse: Grid, stack: Set[Cell], move_down: bool):
-    # Move the stack of movable blocks.
-    # Convert to list. Order top/bottom or other way around, depending on the direction moved.
+def move_stack_vertical(warehouse: Grid, stack: Set[Cell], move_down: bool):
+    # Move the stack of movable blocks up/down. Every item in this list is guaranteed to be able to move.
 
     move_steps = sorted(list(stack), key=attrgetter('y_pos', 'x_pos'), reverse=move_down)
-    # print(f"Sorted step list: {move_steps}")
-
-    # Every item in this list is guaranteed to be able to move up/down one cell.
     move_offset = 1 if move_down else -1
 
     for cell_to_move in move_steps:
         next_x, next_y = cell_to_move.x_pos, cell_to_move.y_pos + move_offset
 
-        # print(f"moving {cell_to_move} to {next_x, next_y}")
         warehouse.set_val(next_x, next_y, cell_to_move.get_value())
+
+        # This ensures offsetted blocks will be empty if there is nothing above it.
+        if (next_x, next_y + move_offset) not in stack:
+            warehouse.set_val(*cell_to_move.get_pos(), EMPTY)
 
     # This is the block directly adjacent to the robot. One of these will be filled by the robot later.
     warehouse.set_val(*move_steps[-1].get_pos(), EMPTY)
@@ -141,48 +140,48 @@ def move_stack(warehouse: Grid, stack: Set[Cell], move_down: bool):
 def move_blocks(warehouse: Grid, robo_cell: Cell, direction: Tuple[int, int]):
 
     move_x, move_y = direction
-    next_cell = warehouse.get_cell(robo_cell.x_pos + move_x, robo_cell.y_pos + move_y)
+    curr_cell = warehouse.get_cell(robo_cell.x_pos + move_x, robo_cell.y_pos + move_y)
 
-    while next_cell.get_value() != EMPTY:
-        if next_cell.get_value() == WALL:
+    while curr_cell.get_value() != EMPTY:
+        if curr_cell.get_value() == WALL:
             # Blocks all the way to the wall.
             return robo_cell
 
-        if (block_half := next_cell.get_value()) in BLOCKS:
+        if (block_half := curr_cell.get_value()) in BLOCKS:
 
             if up_down := (direction in (move_map['^'], move_map['v'])):
                 # Moving up or down
                 offset_x, offset_y = move_map['>' if block_half == BLOCKS[0] else '<']
-                other_block_half = warehouse.get_cell(next_cell.x_pos + offset_x, next_cell.y_pos + offset_y)
-                moveable_cells, move_possible = check_next_for_blocks(warehouse, next_cell, direction)
+                other_block_half = warehouse.get_cell(curr_cell.x_pos + offset_x, curr_cell.y_pos + offset_y)
+                moveable_cells, move_possible = check_next_for_blocks(warehouse, curr_cell, direction)
 
-                if not move_possible:
-                    # print(f"1: Move failed due to hitting a wall.")
+                if not move_possible:  # Hit a wall in the first branch.
                     return robo_cell
 
                 if other_block_half not in moveable_cells:
                     more_moveable_cells, move_possible = check_next_for_blocks(warehouse, other_block_half, direction)
 
-                    if not move_possible:
-                        # print(f"2: Move failed due to hitting a wall.")
+                    if not move_possible:  # Hit a wall in the second branch.
                         return robo_cell
-                    moveable_cells.update(more_moveable_cells)
 
-                    # TODO: This only moves the blocks. Don't forget to move the robot.
-                    move_stack(warehouse, moveable_cells, direction == (0, 1))
+                    moveable_cells.update(more_moveable_cells)
+                    move_stack_vertical(warehouse, moveable_cells, direction == (0, 1))
                     break
 
             else:
                 # Moving left/right
-                next_cell = warehouse.get_cell(next_cell.x_pos + move_x, next_cell.y_pos + move_y)
+                curr_cell = warehouse.get_cell(curr_cell.x_pos + move_x, curr_cell.y_pos + move_y)
 
     if not up_down:
-        # We need to walk back and invert all the blocks.
-        raise NotImplementedError
-        ...
+        # Next cell is empty and we're moving blocks left/right, we need to walk back and invert all the blocks.
+        next_cell = warehouse.get_cell(curr_cell.x_pos - move_x, curr_cell.y_pos)
 
-    # TODO: correctly move blocks sideways
-    # next_cell.set_value(BLOCK)
+        while (next_val := next_cell.get_value()) != ROBOT:
+            warehouse.set_val(*curr_cell.get_pos(), next_val)
+            curr_cell = next_cell
+            next_cell = warehouse.get_cell(curr_cell.x_pos - move_x, curr_cell.y_pos)
+
+    # Finally we need to move the robot itself.
     robo_cell.set_value(EMPTY)
     next_robo_cell = warehouse.get_cell(robo_cell.x_pos + move_x, robo_cell.y_pos + move_y)
     next_robo_cell.set_value(ROBOT)
@@ -192,8 +191,8 @@ def move_blocks(warehouse: Grid, robo_cell: Cell, direction: Tuple[int, int]):
 def solve() -> int:
     acc: int = 0
 
-    # lines = get_lines_as_grid()
-    lines = get_lines_as_grid(True)
+    lines = get_lines_as_grid()
+    # lines = get_lines_as_grid(True)
 
     grid, moves, robo_pos = get_grid_and_moves(lines)
     warehouse = Grid(grid)
@@ -202,8 +201,6 @@ def solve() -> int:
     while moves:
         robo_x, robo_y = robo_cell.get_pos()
         curr_move = moves.pop(0)
-        print(f"curr_move: {curr_move}")
-        warehouse.print()
         move_x, move_y = move_map[curr_move]
 
         if (next_cell := warehouse.get_cell(robo_x + move_x, robo_y + move_y)).get_value() == WALL:
@@ -222,17 +219,13 @@ def solve() -> int:
 
     for y, row in enumerate(warehouse):
         for x, cell in enumerate(row):
-            if cell.get_value() not in BLOCKS:
+            if cell.get_value() != BLOCKS[0]:
                 continue
 
             acc += y * 100 + x
 
-    print(f"\nFinal state:")
     warehouse.print()
-
-    print(f"\n Don't forget you've changed the testdata. Both grid and input moves.")
-
-    return acc  # 1461806
+    return acc  # 1495455
 
 
 if __name__ == "__main__":
