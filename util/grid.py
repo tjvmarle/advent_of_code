@@ -135,6 +135,14 @@ class Grid():
 
         return [cell for cell in middle_cell.get_adjacent_neighbours() if condition(cell)]
 
+    def get_adjacent_neighbours_with_value(self, x_pos: int, y_pos: int, value: Any) -> Optional[List[Cell]]:
+        middle_cell = self.get_cell(x_pos, y_pos)
+
+        if not middle_cell:
+            return None
+
+        return [cell for cell in middle_cell.get_adjacent_neighbours() if cell.get_value() == value]
+
     def get_surrounding_neighbours_with(self, x_pos: int, y_pos: int, condition: Callable) -> Optional[List[Cell]]:
         middle_cell = self.get_cell(x_pos, y_pos)
 
@@ -143,8 +151,22 @@ class Grid():
 
         return [cell for cell in middle_cell.get_surrounding_neighbours() if condition(cell)]
 
+    def get_surrounding_neighbours_with_value(self, x_pos: int, y_pos: int, value: Any) -> Optional[List[Cell]]:
+        middle_cell = self.get_cell(x_pos, y_pos)
+
+        if not middle_cell:
+            return None
+
+        return [cell for cell in middle_cell.get_surrounding_neighbours() if cell.get_value() == value]
+
     def rotate(self, clockwise=True):
         self._rotations += 1 if clockwise else -1
 
     def __iter__(self):
         return (row for row in self.grid)
+
+    def __getitem__(self, index) -> List[Cell]:
+        return self.grid[index]
+
+    def __len__(self) -> int:
+        return len(self.grid)

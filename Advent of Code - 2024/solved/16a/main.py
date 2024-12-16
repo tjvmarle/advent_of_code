@@ -1,4 +1,4 @@
-from util.input import *  # Yeah yeah, blah blah
+from util.input import *  # # Yeah yeah, blah blah
 from util.grid import Grid, Cell
 from typing import List, Tuple, Set, Dict
 import cProfile
@@ -13,7 +13,7 @@ PATH = 'X'
 
 
 def fill_dead_ends(grid: Grid):
-    # Not sure if it helps, but this will remove any dead ends except roundabouts.
+    # Not sure if it helps, but this will remove any dead ends.
 
     cntr = 1
 
@@ -30,6 +30,10 @@ def fill_dead_ends(grid: Grid):
                 dead_end_filled = True
 
         cntr += -1 if dead_end_filled else 1
+
+
+def get_neighbour_value():
+    ...
 
 
 def get_path_value(path: List[Cell], grid: Grid):
@@ -57,49 +61,32 @@ def is_empty_or_goal(cell: Cell):
     return cell.get_value() in [EMPTY, END]
 
 
-# Setting these bounds saves a lot of calculations and makes it easier to count the paths.
-path_value_limit = 99460
-# path_value_limit = 11048
-# path_value_limit = 7036
-
-best_path_cells: Set[Cell] = set()
-best_paths: List[List[Cell]] = []
+# path_value_limit = 99489
+path_value_limit = 100_000
+best_path: List[Cell] = []
 node_limit_map: Dict[Tuple[int, int], int] = {}
 
 
 def search_to_end(grid: Grid, curr_cell: Cell, curr_path: List[Cell], curr_path_val: int):
-
     curr_path.append(curr_cell)
+
     neighbours = grid.get_adjacent_neighbours_with(*curr_cell.get_pos(), is_empty_or_goal)
 
-    # We save the path value at T-junctions. If we encounter it again with a higher value we can skip that attempt. We
-    # skip crossroads, since they're more complex to properly cache.
-    if len(neighbours) == 3:
-
-        # If the next straight move would be a wall, this node costs an additional turn. Otherwise we'll end up caching
-        # incorrect values, since from one direction you'll be forced to turn and from the other you won't.
-        prev_x, prev_y = curr_path[-2].get_pos()
-        curr_x, curr_y = curr_cell.get_pos()
-        delta_x, delta_y = curr_x - prev_x, curr_y - prev_y
-        actual_path_val = curr_path_val
-        if grid.get_val(curr_x + delta_x, curr_y + delta_y) == WALL:
-            # Next move would be into a wall. So the proper node value costs an additional turn.
-            actual_path_val += 1000
-
+    if len(neighbours) > 2:
+        # We've hit a node. If we've hit this node before with a lower value the current path is taking too long.
         global node_limit_map
         if (pos := curr_cell.get_pos()) in node_limit_map:
 
-            if node_limit_map[pos] < actual_path_val:
-                return  # This path is already too long.
-
-            else:  # Current path is shorter/faster or at least equivalent.
-                node_limit_map[pos] = actual_path_val
+            if node_limit_map[pos] < curr_path_val:
+                return False  # This path is already too long.
+            else:  # Current path is shorter/faster.
+                node_limit_map[pos] = curr_path_val
         else:
-            node_limit_map[pos] = actual_path_val
+            node_limit_map[pos] = curr_path_val
 
     global path_value_limit
-    if curr_path_val >= path_value_limit:
-        return
+    if len(curr_path) > 2 and curr_path_val >= path_value_limit:
+        return False
 
     for next_cell in neighbours:
 
@@ -109,14 +96,20 @@ def search_to_end(grid: Grid, curr_cell: Cell, curr_path: List[Cell], curr_path_
         if next_cell.get_value() == END:
             curr_path_val += 1
             curr_path.append(next_cell)
+            path_value_limit = get_path_value(curr_path, grid)
 
-            global best_path_cells, best_paths
-            best_path_cells.update(curr_path)
-            best_paths.append(list(curr_path))
+            if path_value_limit != curr_path_val:
+                print(f"  ERROR! Calculated path: {path_value_limit}, curr_path_val: {curr_path_val}, path length: {
+                    len(curr_path)}")
+            else:
+                print(f"Calculated path: {path_value_limit}, curr_path_val: {curr_path_val}, current path length: {
+                    len(curr_path)}.")
+            global best_path
+            best_path = list(curr_path)
 
             curr_path.pop()  # We've saved the current path, now we need to clean up until we reach another branch.
             curr_path_val -= 1
-            return
+            return True
 
         prev_x, prev_y = curr_path[-2].get_pos()
         path_val_increase = 1 if next_cell.x_pos == prev_x or next_cell.y_pos == prev_y else 1001
@@ -127,7 +120,7 @@ def search_to_end(grid: Grid, curr_cell: Cell, curr_path: List[Cell], curr_path_
         curr_path.pop()  # Otherwise we'll block ourselves
         curr_path_val -= path_val_increase
 
-    return
+    return False
 
 
 def start_search(grid: Grid):
@@ -152,27 +145,29 @@ def solve() -> int:
     maze = Grid(lines)
     fill_dead_ends(maze)
 
-    # Due to the high recursive nature of the solution we need a bit more stack space.
+    # Initial brute force attempts reached the end in ~2600 steps.
     sys.setrecursionlimit(5000)
     start_search(maze)
 
     fresh_maze = Grid(get_lines_as_grid())
     # fresh_maze = Grid(get_lines_as_grid(True))
+    global best_path
 
-    global best_path_cells, best_paths
-    for path in best_paths:
-        print(f"  Path: {path}")
-
-    for cell in best_path_cells:
+    print(f"\nBest path value:")
+    val = get_path_value(best_path, maze)
+    print(f"\t{val}")
+    print("\n")
+    print(f"Path: {best_path}\n")
+    for cell in best_path:
         fresh_maze.set_val(*cell.get_pos(), "X")
 
     print(f"\nSolution:\n")
     fresh_maze.print()
+    print("\n")
 
-    return len(best_path_cells)  # 500
+    return path_value_limit  # 99460
 
 
-# Our lesson of the day: be careful with so many returns in a recursive solution.
 if __name__ == "__main__":
     # cProfile.run("print(solve())", "performance_data")
     print(solve())

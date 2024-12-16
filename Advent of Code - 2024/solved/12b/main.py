@@ -62,7 +62,7 @@ def my_sides(subfield: List[Cell], field_char: str) -> int:
     side_count = 0
     for multi_row in multi_grid:
         for multi_cell in multi_row:
-            if multi_cell.get_value() != FIELD_CHAR:
+            if multi_cell.get_value() != field_char:
                 # This way we also automatically skip the edges of the grid, since we've added an empty border.
                 continue
 

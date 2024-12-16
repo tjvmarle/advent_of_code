@@ -1,0 +1,17 @@
+Overview of solutions that should/could probably have a much better solution. These are good challenges to solve later
+in a more in-depth way, instead of relying too much of some flavour of brute forcing.
+
+2024 - 16a
+ *  Can be brute forced by recursively traversing every possible path without colliding with itself. Could probably be 
+    solved by some variant of A* or Dijkstra's, would require converting the grid into nodes somehow. This would allow 
+    to eliminate a bunch of paths that would never yield a shorter distance.
+
+    #####                    #####                               
+    #...#  is equivalent to  #####                               
+    #.#.#    ----------->    #####                               
+    #...#                    #...#                               
+    #.#.#                    #.#.#                               
+
+    This would also save a ton on duplication beacuse of these branching.
+    Each nodes' value can't be determined directly, but the current traversal path can be used as an upper limit. You 
+    can skip every future pass with a higher value and lower it when possible.
