@@ -1,8 +1,6 @@
 from util.input import *  # Yeah yeah, blah blah
-from util.grid import Grid, Cell
 from typing import List, Tuple, Set, Dict
 import cProfile
-from operator import attrgetter
 import re
 
 RAX = 0
