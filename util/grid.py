@@ -1,4 +1,6 @@
 from typing import List, Any, Optional, Generator, Callable, Tuple
+import numpy as np
+from PIL import Image
 
 
 class Cell():
@@ -58,6 +60,11 @@ class Cell():
 
 Grid_input = List[List[Any]] | Generator
 Cell_Grid = List[List[Cell]]
+
+# TODO:
+# Fix rotations
+# Sort methods
+# implement a move-up/down/left/right-method
 
 
 class Grid():
@@ -170,3 +177,36 @@ class Grid():
 
     def __len__(self) -> int:
         return len(self.grid)
+
+    def _to_img(self, cell_to_rgb: Callable):
+        data = np.zeros((len(self.grid[0]), len(self), 3), dtype=np.uint8)
+        for y, row in enumerate(self):
+            for x, cell in enumerate(row):
+                data[y][x] = cell_to_rgb(cell.get_value())
+
+        return Image.fromarray(data)
+
+    def to_bw_img(self, to_white: Callable[[Cell], bool]):
+        """Converts the datagrid to a black-and-white image. Requires a boolean function to determine if a cell is
+           white."""
+        def white_func(cell): return [255, 255, 255] if to_white(cell) else [0, 0, 0]
+
+        return self._to_img(white_func)
+
+    def to_grayscale_img(self, to_gray: Callable[[Cell], int]):
+        """Converts the datagrid to a black-and-white image. Requires a function to convert the cell data to a 0-255
+           value."""
+
+        return self._to_img(to_gray)
+
+    def to_rgb_img(self, to_rgb: Callable[[Cell], List[int]]):
+        """Converts the datagrid to a rgb image. Requires a function to convert the cell data to three 0-255 values."""
+
+        return self._to_img(to_rgb)
+
+    def transform_cells(self, transform_func: Callable[[Cell], None]) -> None:
+        """Applies a function to each cell in the grid."""
+
+        for row in self:
+            for cell in row:
+                cell.set_value(transform_func(cell.get_value()))

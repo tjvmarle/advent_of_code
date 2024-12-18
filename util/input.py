@@ -24,7 +24,7 @@ def _get_lines(tst: bool = False):
         return [line.strip('\n') for line in file.readlines()]
 
 
-def get_lines(tst: bool = False) -> List[str]:
+def get_lines(tst: bool = False) -> Generator[str]:
     """Geeft 1-voor-1 de regels van een input file terug."""
     for line in _get_lines(tst):
         yield line
