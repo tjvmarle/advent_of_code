@@ -9,53 +9,108 @@ EMPTY = "."
 BYTE = "#"
 
 
-# Second half can still be easily brute forced. If it takes to long we can change the implementation to a binary
-# approach instead:
-# Drop 1024 bytes + remaining bytes / 2
-#   If this blocks the end: half the 'remaining bytes' amount and repeat.
-#     1024 bytes + remaining bytes / 4
-#   If the end can still be reached: add the next half of remaining bytes (== 1/4):
-#     1024 + remaining bytes / 2 + remaining bytes / 4
-# Etc. untill answer is reached. Should be quite performant.
+def arrange_towels(remaining_design: str, towels: List[str]) -> bool:
+
+    if remaining_design == "":
+        return True
+
+    for towel in towels:
+        if remaining_design.startswith(towel):
+
+            if arrange_towels(remaining_design[len(towel):], towels):
+                return True
+
+    return False
+
+
+cache: Dict[str, int] = {}
+
+
+def arrange_towels_all(remaining_design: str, towels: List[str], curr_count: int = 0) -> int:
+    # Lets try something with a recursive sliding window.
+
+    if remaining_design == "":
+        return 1
+
+    for towel in towels:
+        if remaining_design.startswith(towel):
+            curr_count += arrange_towels_all(remaining_design[len(towel):], towels)
+
+    return curr_count
+
+
+# # Python program for coin change problem using memoization
+# def countRecur(coins, n, sum, memo):
+
+#     # If sum is 0 then there is 1 solution
+#     # (do not include any coin)
+#     if sum == 0:
+#         return 1
+
+#     # 0 ways in the following two cases
+#     if sum < 0 or n == 0:
+#         return 0
+
+#     # If the subproblem is previously calculated then
+#     # simply return the result
+#     if memo[n - 1][sum] != -1:
+#         return memo[n - 1][sum]
+
+#     # count is sum of solutions (i)
+#     # including coins[n-1] (ii) excluding coins[n-1]
+#     memo[n - 1][sum] = (countRecur(coins, n, sum - coins[n - 1], memo) +
+#                         countRecur(coins, n - 1, sum, memo))
+#     return memo[n - 1][sum]
+
+
+# def count(coins, sum):
+#     memo = [[-1 for _ in range(sum + 1)] for _ in range(len(coins))]
+#     return countRecur(coins, len(coins), sum, memo)
+
+
+# if __name__ == "__main__":
+#     coins = [1, 2, 3]
+#     sum = ""
+#     print(count(coins, sum))
+
+
+def consume(remaining_string: str, indexed_towels: Dict[int, List[str]]):
+
+    for towel in indexed_towels.values():
+        if not remaining_string.startswith(towel):
+            continue
+
+        ...  # Do stuff
+
+    # If we reach this point we've check
+    # consume the string bit by bit and cache string combinations
+
+
+# Feels like some variant of the coin change problem? I'm pretty stuck here.
 def solve() -> int:
+    acc: int = 0
 
-    base_maze = [[EMPTY for _ in range(SIZE)] for _ in range(SIZE)]
-    lines = get_lines()
+    # lines = get_lines()
 
-    for _ in range(1024):
-        x, y = [int(pos) for pos in next(lines).split(",")]
-        base_maze[y][x] = BYTE
+    lines = get_lines(True)
+    towels: List[str] = [towel.strip() for towel in next(lines).split(",")]
 
-    additional_bytes: List[Tuple[int, int]] = []
+    indexed_towels: Dict[int, List[str]] = {}
+    for towel in towels:
+        sized_towels = indexed_towels.get(len(towel), [])
+        sized_towels.append(towel)
+        indexed_towels[len(towel)] = sized_towels
 
-    while True:
-        fresh_maze = Grid(list(base_maze))  # We'll skip the first 1024 bytes.
-        next_x, next_y = [int(pos) for pos in next(lines).split(",")]
-        additional_bytes.append((next_x, next_y))
+    next(lines)  # Empty line
+    valid_designs = []
+    for design in lines:
+        if arrange_towels(design, towels):
+            valid_designs.append(design)
 
-        steps = 0
-        start_pos = (0, 0)
+    for valid_design in valid_designs:
+        acc = arrange_towels_all(valid_design, towels)
 
-        curr_layer: Set[Tuple[int, int]] = set()
-        curr_layer.add(start_pos)
-
-        for byte in additional_bytes:
-            fresh_maze.set_val(*byte, BYTE)
-
-        while curr_layer:
-            steps += 1
-            next_layer = set()
-            for pos in curr_layer:
-                neighbours = fresh_maze.get_adjacent_neighbours_with_value(*pos, EMPTY)
-
-                for cell in neighbours:
-                    cell.set_value(steps)
-                    next_layer.add(cell.get_pos())
-
-            curr_layer = next_layer
-
-        if fresh_maze.get_cell(SIZE - 1, SIZE - 1).get_value() == EMPTY:
-            return additional_bytes[-1]  # 39,40 - Took ~30+ seconds.
+    return acc  # 209
 
 
 if __name__ == "__main__":
