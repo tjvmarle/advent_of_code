@@ -1,3 +1,10 @@
-zx,  x, y, z, xy, yz
+r, wr, b, g, bwu, rb, gb, br
 
-xyzxyz
+brwrr
+bggr
+gbbr
+rrbgbr
+ubwu
+bwurrg
+brgr
+bbrgwb
