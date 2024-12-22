@@ -4,68 +4,44 @@ from typing import List, Tuple, Set, Dict
 import cProfile
 
 
-SIZE = 71
-EMPTY = "."
-BYTE = "#"
+numpad = """
++---+---+---+
+| 7 | 8 | 9 |
++---+---+---+
+| 4 | 5 | 6 |
++---+---+---+
+| 1 | 2 | 3 |
++---+---+---+
+    | 0 | A |
+    +---+---+
+"""
+
+dirpad = """
+    +---+---+
+    | ^ | A |
++---+---+---+
+| < | v | > |
++---+---+---+
+"""
+
+# There's no need to solve any directional input. The only thing that matters is the distance between each buttonpress.
+
+dist_matrix = [
+    [8][4][8][12][8][12][16][12][16][4]  # 0 --> 1,2,3,4,5,6,7,8,9,A
+    [8][4][8][4][8][12][8][12][16][12]  # 1 --> 0,2,3,4,5,6,7,8,9,A
+]
 
 
-def validate_design(remaining_design: str, towels: List[str]) -> bool:
-
-    if remaining_design == "":
-        return True
-
-    for towel in towels:
-        if remaining_design.startswith(towel):
-
-            if validate_design(remaining_design[len(towel):], towels):
-                return True
-
-    return False
-
-
-cache: Dict[str, int] = {"": 1}
-
-
-def arrange_towel_all_combinations(remaining_design: str, towels: List[str]) -> int:
-    global cache
-
-    if remaining_design in cache:
-        return cache[remaining_design]
-
-    curr_remaining_count = 0
-    for towel in towels:
-        if remaining_design.startswith(towel):
-            curr_remaining_count += arrange_towel_all_combinations(remaining_design[len(towel):], towels)
-
-    cache[remaining_design] = curr_remaining_count
-    return curr_remaining_count
-
-
-# Feels like some variant of the coin change problem?
 def solve() -> int:
     acc: int = 0
 
     lines = get_lines()
     # lines = get_lines(True)
 
-    towels: List[str] = [towel.strip() for towel in next(lines).split(",")]
+    for line in numpad.split("\n"):
+        print(f"line: {line}")
 
-    indexed_towels: Dict[int, List[str]] = {}
-    for towel in towels:
-        sized_towels = indexed_towels.get(len(towel), [])
-        sized_towels.append(towel)
-        indexed_towels[len(towel)] = sized_towels
-
-    next(lines)  # Empty line
-    valid_designs = []
-    for design in lines:
-        if validate_design(design, towels):
-            valid_designs.append(design)
-
-    for valid_design in valid_designs:
-        acc += arrange_towel_all_combinations(valid_design, towels)
-
-    return acc  # 777669668613191
+    return acc
 
 
 if __name__ == "__main__":
